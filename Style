@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Нотатки</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body>
+
+  <!-- ==================== ЕКРАН АВТОРИЗАЦІЇ ==================== -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo-row">
+        <div class="auth-icon-box">
+          <i class="ti ti-notebook" aria-hidden="true"></i>
+        </div>
+        <div>
+          <div class="auth-title" id="auth-heading">Вхід до нотаток</div>
+          <div class="auth-sub" id="auth-subheading">Продовжте з вашим акаунтом</div>
+        </div>
+      </div>
+
+      <div id="reg-name-wrap" class="field hidden">
+        <label for="reg-name">Ім'я</label>
+        <input type="text" id="reg-name" placeholder="Ваше ім'я">
+      </div>
+
+      <div class="field">
+        <label for="auth-email">Email</label>
+        <input type="email" id="auth-email" placeholder="you@example.com">
+      </div>
+
+      <div class="field">
+        <label for="auth-pass">Пароль</label>
+        <input type="password" id="auth-pass" placeholder="••••••••">
+      </div>
+
+      <div id="auth-err" class="err"></div>
+
+      <button class="btn-primary" id="auth-submit" onclick="handleAuth()">Увійти</button>
+
+      <div class="auth-switch">
+        <span id="switch-text">Немає акаунту?</span>
+        <a id="switch-link" onclick="toggleMode()"> Зареєструватися</a>
+      </div>
+
+      <div class="demo-hint">
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        Демо: email <strong>demo@notes.app</strong>, пароль <strong>demo1234</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ГОЛОВНИЙ ДОДАТОК ==================== -->
+  <div id="main-app" class="app hidden">
+
+    <!-- Бічна панель -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-logo">
+          <i class="ti ti-notebook" aria-hidden="true"></i> Нотатки
+        </div>
+        <div class="user-badge" onclick="logout()" title="Вийти">
+          <div id="user-avatar"></div>
+          <i class="ti ti-logout" aria-hidden="true"></i>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <i class="ti ti-search search-icon" aria-hidden="true"></i>
+        <input type="text" id="search-input" placeholder="Пошук нотаток..." oninput="filterNotes()">
+      </div>
+
+      <button class="new-note-btn" onclick="newNote()">
+        <i class="ti ti-plus" aria-hidden="true"></i> Нова нотатка
+      </button>
+
+      <div class="notes-list" id="notes-list"></div>
+    </div>
+
+    <!-- Основна зона -->
+    <div class="main">
+
+      <!-- Редактор -->
+      <div id="editor-wrap" class="hidden editor-flex">
+        <div class="editor-header">
+          <input type="text" class="editor-title-input" id="note-title"
+                 placeholder="Назва нотатки" oninput="autoSave()">
+          <div class="editor-actions">
+            <div class="save-indicator" id="save-ind">
+              <i class="ti ti-check" aria-hidden="true"></i> Збережено
+            </div>
+            <button class="icon-btn danger" onclick="deleteNote()"
+                    title="Видалити нотатку" aria-label="Видалити нотатку">
+              <i class="ti ti-trash" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button class="tb-btn" onclick="fmt('bold')" title="Жирний"><i class="ti ti-bold" aria-hidden="true"></i></button>
+          <button class="tb-btn" onclick="fmt('italic')" title="Курсив"><i class="ti ti-italic" aria-hidden="true"></i></button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" onclick="insertMd('# ')">H1</button>
+          <button class="tb-btn" onclick="insertMd('## ')">H2</button>
+          <button class="tb-btn" onclick="insertMd('### ')">H3</button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" onclick="insertMd('- ')" title="Список"><i class="ti ti-list" aria-hidden="true"></i></button>
+          <button class="tb-btn" onclick="insertMd('- [ ] ')" title="Чекбокс"><i class="ti ti-checkbox" aria-hidden="true"></i></button>
+          <button class="tb-btn" onclick="insertMd('> ')" title="Цитата"><i class="ti ti-blockquote" aria-hidden="true"></i></button>
+          <button class="tb-btn" onclick="insertCode()" title="Код"><i class="ti ti-code" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="editor-body">
+          <textarea id="note-body" placeholder="Починайте писати..." oninput="autoSave()"></textarea>
+        </div>
+
+        <div class="editor-footer">
+          <span id="word-count">0 слів</span>
+          <span id="last-saved"></span>
+        </div>
+      </div>
+
+      <!-- Порожній стан -->
+      <div id="empty-state" class="empty-state">
+        <i class="ti ti-notes" aria-hidden="true"></i>
+        <p>Оберіть нотатку або створіть нову</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
