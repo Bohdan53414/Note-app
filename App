@@ -1,0 +1,363 @@
+/* ============================================================
+   Notes App — JavaScript
+   Авторизація + CRUD нотаток + пошук + автозбереження
+   ============================================================ */
+
+// ---------- Демо-акаунт ----------
+const DEMO = { email: 'demo@notes.app', pass: 'demo1234', name: 'Демо' };
+
+// ---------- Стан ----------
+let users       = JSON.parse(localStorage.getItem('napp_users') || '[]');
+let currentUser = null;
+let notes       = [];
+let activeId    = null;
+let saveTimer   = null;
+let isRegMode   = false;
+
+// ---------- Ініціалізація ----------
+document.addEventListener('DOMContentLoaded', () => {
+  // Enter у полі пароля — підтвердити форму
+  document.getElementById('auth-pass').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleAuth();
+  });
+});
+
+// =============================================================
+// АВТОРИЗАЦІЯ
+// =============================================================
+
+/** Перемикання між режимами «Вхід» і «Реєстрація» */
+function toggleMode() {
+  isRegMode = !isRegMode;
+
+  document.getElementById('auth-heading').textContent =
+    isRegMode ? 'Реєстрація' : 'Вхід до нотаток';
+  document.getElementById('auth-subheading').textContent =
+    isRegMode ? 'Створіть новий акаунт' : 'Продовжте з вашим акаунтом';
+  document.getElementById('auth-submit').textContent =
+    isRegMode ? 'Зареєструватися' : 'Увійти';
+  document.getElementById('switch-text').textContent =
+    isRegMode ? 'Вже є акаунт?' : 'Немає акаунту?';
+  document.getElementById('switch-link').textContent =
+    isRegMode ? ' Увійти' : ' Зареєструватися';
+
+  document.getElementById('reg-name-wrap').classList.toggle('hidden', !isRegMode);
+  document.getElementById('auth-err').textContent = '';
+}
+
+/** Обробка натискання кнопки «Увійти / Зареєструватися» */
+function handleAuth() {
+  const email  = document.getElementById('auth-email').value.trim().toLowerCase();
+  const pass   = document.getElementById('auth-pass').value;
+  const errEl  = document.getElementById('auth-err');
+
+  if (!email || !pass) {
+    errEl.textContent = 'Заповніть усі поля';
+    return;
+  }
+
+  if (isRegMode) {
+    // --- Реєстрація ---
+    const name = document.getElementById('reg-name').value.trim();
+    if (!name)        { errEl.textContent = "Введіть ваше ім'я"; return; }
+    if (pass.length < 6) { errEl.textContent = 'Пароль мінімум 6 символів'; return; }
+    if (users.find(u => u.email === email) || email === DEMO.email) {
+      errEl.textContent = 'Цей email вже використовується';
+      return;
+    }
+    const newUser = { email, pass, name, notes: [] };
+    users.push(newUser);
+    localStorage.setItem('napp_users', JSON.stringify(users));
+    loginUser(newUser);
+
+  } else {
+    // --- Вхід ---
+    let user;
+    if (email === DEMO.email && pass === DEMO.pass) {
+      // Демо-акаунт: нотатки в окремому ключі
+      user = {
+        email: DEMO.email,
+        name:  DEMO.name,
+        notes: JSON.parse(localStorage.getItem('napp_demo_notes') || '[]')
+      };
+    } else {
+      user = users.find(u => u.email === email && u.pass === pass);
+    }
+
+    if (!user) {
+      errEl.textContent = 'Невірний email або пароль';
+      return;
+    }
+    loginUser(user);
+  }
+}
+
+/** Встановлює поточного користувача і показує додаток */
+function loginUser(user) {
+  currentUser = user;
+  notes       = [...(user.notes || [])];
+
+  // Аватар — перша літера імені
+  const av = document.getElementById('user-avatar');
+  av.textContent = (user.name || user.email).charAt(0).toUpperCase();
+
+  document.getElementById('auth-screen').classList.add('hidden');
+  const app = document.getElementById('main-app');
+  app.classList.remove('hidden');
+
+  renderList();
+  if (notes.length > 0) openNote(notes[0].id);
+}
+
+/** Вихід із акаунту */
+function logout() {
+  saveCurrentNote();
+  currentUser = null;
+  activeId    = null;
+  notes       = [];
+
+  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('auth-screen').classList.remove('hidden');
+
+  // Очищаємо поля
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-pass').value  = '';
+  document.getElementById('auth-err').textContent = '';
+  document.getElementById('notes-list').innerHTML  = '';
+  document.getElementById('search-input').value    = '';
+
+  hideEditor();
+}
+
+// =============================================================
+// ЗБЕРЕЖЕННЯ В localStorage
+// =============================================================
+
+function saveToStorage() {
+  if (!currentUser) return;
+  if (currentUser.email === DEMO.email) {
+    localStorage.setItem('napp_demo_notes', JSON.stringify(notes));
+  } else {
+    const idx = users.findIndex(u => u.email === currentUser.email);
+    if (idx > -1) {
+      users[idx].notes = notes;
+      localStorage.setItem('napp_users', JSON.stringify(users));
+    }
+  }
+}
+
+// =============================================================
+// CRUD НОТАТОК
+// =============================================================
+
+/** Нова нотатка */
+function newNote() {
+  saveCurrentNote();
+  const id = 'n' + Date.now();
+  const note = {
+    id,
+    title:   'Нова нотатка',
+    body:    '',
+    created: new Date().toISOString(),
+    updated: new Date().toISOString()
+  };
+  notes.unshift(note);
+  saveToStorage();
+  renderList();
+  openNote(id);
+  // Одразу фокус на заголовок
+  setTimeout(() => {
+    const t = document.getElementById('note-title');
+    t.focus();
+    t.select();
+  }, 50);
+}
+
+/** Відкрити нотатку за id */
+function openNote(id) {
+  saveCurrentNote();
+  activeId = id;
+  const note = notes.find(n => n.id === id);
+  if (!note) return;
+
+  document.getElementById('note-title').value = note.title;
+  document.getElementById('note-body').value  = note.body;
+
+  updateWordCount();
+  updateLastSaved(note.updated);
+  showEditor();
+  renderList();
+}
+
+/** Видалити активну нотатку */
+function deleteNote() {
+  if (!activeId) return;
+  if (!confirm('Видалити цю нотатку?')) return;
+
+  notes = notes.filter(n => n.id !== activeId);
+  saveToStorage();
+  activeId = null;
+  hideEditor();
+  renderList();
+  if (notes.length > 0) openNote(notes[0].id);
+}
+
+/** Зберегти поточні дані редактора в масив */
+function saveCurrentNote() {
+  if (!activeId) return;
+  const note = notes.find(n => n.id === activeId);
+  if (!note) return;
+
+  note.title   = document.getElementById('note-title').value.trim() || 'Без назви';
+  note.body    = document.getElementById('note-body').value;
+  note.updated = new Date().toISOString();
+
+  // Підняти нотатку на верх списку
+  const idx = notes.indexOf(note);
+  if (idx > 0) {
+    notes.splice(idx, 1);
+    notes.unshift(note);
+  }
+  saveToStorage();
+}
+
+/** Автозбереження з debounce 600 мс */
+function autoSave() {
+  updateWordCount();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveCurrentNote();
+    renderList();
+    const si = document.getElementById('save-ind');
+    si.classList.add('show');
+    setTimeout(() => si.classList.remove('show'), 1800);
+    updateLastSaved(new Date().toISOString());
+  }, 600);
+}
+
+// =============================================================
+// ВІДОБРАЖЕННЯ
+// =============================================================
+
+/** Показати/сховати редактор */
+function showEditor() {
+  document.getElementById('editor-wrap').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+}
+
+function hideEditor() {
+  document.getElementById('editor-wrap').classList.add('hidden');
+  document.getElementById('empty-state').classList.remove('hidden');
+}
+
+/** Рендер списку нотаток */
+function renderList(filtered) {
+  const listEl = document.getElementById('notes-list');
+  const arr    = filtered || notes;
+
+  if (!arr.length) {
+    listEl.innerHTML = '<div class="notes-empty">Нотаток не знайдено</div>';
+    return;
+  }
+
+  listEl.innerHTML = arr.map(note => {
+    const d      = new Date(note.updated);
+    const ds     = d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
+    const preview = (note.body || '').replace(/[\n\r]+/g, ' ').trim().slice(0, 60) || 'Порожня нотатка';
+    const active  = note.id === activeId ? 'active' : '';
+
+    return `
+      <div class="note-item ${active}" onclick="openNote('${note.id}')">
+        <div class="note-item-title">${esc(note.title || 'Без назви')}</div>
+        <div class="note-item-preview">${esc(preview)}</div>
+        <div class="note-item-date">${ds}</div>
+      </div>`;
+  }).join('');
+}
+
+/** Живий пошук */
+function filterNotes() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  if (!q) return renderList();
+  renderList(notes.filter(n =>
+    (n.title || '').toLowerCase().includes(q) ||
+    (n.body  || '').toLowerCase().includes(q)
+  ));
+}
+
+/** Оновити лічильник слів/символів */
+function updateWordCount() {
+  const body = document.getElementById('note-body').value.trim();
+  const wc   = body ? body.split(/\s+/).length : 0;
+  const cc   = body.length;
+  document.getElementById('word-count').textContent = `${wc} сл. · ${cc} симв.`;
+}
+
+/** Оновити час збереження у футері */
+function updateLastSaved(iso) {
+  if (!iso) return;
+  const d = new Date(iso);
+  document.getElementById('last-saved').textContent =
+    'Збережено ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+}
+
+// =============================================================
+// РЕДАКТОР — ФОРМАТУВАННЯ
+// =============================================================
+
+/** Обгортає виділений текст у Markdown-розмітку */
+function fmt(type) {
+  const ta    = document.getElementById('note-body');
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const sel   = ta.value.slice(start, end);
+  const mark  = type === 'bold' ? '**' : '_';
+  const rep   = `${mark}${sel || 'текст'}${mark}`;
+
+  ta.value = ta.value.slice(0, start) + rep + ta.value.slice(end);
+  ta.selectionStart = sel ? start           : start + mark.length;
+  ta.selectionEnd   = sel ? start + rep.length : start + rep.length - mark.length;
+  ta.focus();
+  autoSave();
+}
+
+/** Вставляє Markdown-префікс на початку рядка */
+function insertMd(prefix) {
+  const ta     = document.getElementById('note-body');
+  const start  = ta.selectionStart;
+  const before = ta.value.slice(0, start);
+  const after  = ta.value.slice(start);
+  const lineStart = before.lastIndexOf('\n') + 1;
+
+  ta.value = before.slice(0, lineStart) + prefix + before.slice(lineStart) + after;
+
+  const pos = lineStart + prefix.length + before.slice(lineStart).length;
+  ta.selectionStart = ta.selectionEnd = pos;
+  ta.focus();
+  autoSave();
+}
+
+/** Вставляє блок коду */
+function insertCode() {
+  const ta    = document.getElementById('note-body');
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const sel   = ta.value.slice(start, end);
+  const rep   = sel ? `\`${sel}\`` : '```\n\n```';
+
+  ta.value = ta.value.slice(0, start) + rep + ta.value.slice(end);
+  ta.focus();
+  autoSave();
+}
+
+// =============================================================
+// УТИЛІТИ
+// =============================================================
+
+/** Екранування HTML для безпечного виведення */
+function esc(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
